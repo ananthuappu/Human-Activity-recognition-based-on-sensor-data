@@ -1,0 +1,86 @@
+import pandas as pd
+from bokeh.io import show, output_file
+from bokeh.plotting import figure
+from bokeh.models import FactorRange,HoverTool
+import matplotlib.pyplot as plt
+from scipy import stats
+import numpy as np
+import plotly 
+from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+import plotly.graph_objs as go
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import IsolationForest
+import time
+start = time.time()
+from sklearn import preprocessing
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+import random
+random.seed(450)
+
+#File reading.
+file = pd.read_csv('/home/da_2/Downloads/Activity recognition exp/Activity recognition exp/Phones_accelerometer.csv') 
+file.shape
+
+#EDA and feature selection.
+
+file=file.dropna()
+gt_count = file['gt'].value_counts()
+gt_count
+file=file[file['gt'].isin(gt_count[gt_count > 1615896].index)]
+file.drop(['Arrival_Time','Creation_Time','User','Model','Device'],axis=1, inplace=True)
+
+#outlier removal
+
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+from scipy.spatial import distance
+from mpl_toolkits.mplot3d import Axes3D
+knn = 4
+nbrs = NearestNeighbors(n_neighbors=knn, metric=distance.euclidean).fit(file[file.columns[0:4]].as_matrix())
+distances, indices = nbrs.kneighbors(file[file.columns[0:4]].as_matrix())
+anomaly_score = distances[:,knn-1]
+Axes3D = Axes3D  # pycharm auto import
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+p = ax.scatter(file.x,file.y,file.z,c=anomaly_score,cmap='jet')
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+fig.colorbar(p)
+plt.show()
+anom = pd.DataFrame(anomaly_score, index=file.Index, columns=['Anomaly score'])
+file.reset_index(drop=True, inplace=True)
+anom.reset_index(drop=True, inplace=True)
+result = pd.concat((file,anom), axis=1)
+re=result.nlargest(100,'Anomaly score')
+re.sort_index(inplace=True)
+file = file[file['Index'].isin(re['Index'])==False]
+
+#splitting the data into test and train
+
+target = file['gt']
+features = file.drop(labels =['Index','gt'],axis = 1)
+X_train, X_test,y_train,y_test = train_test_split(features,target, test_size=0.30,random_state=100)
+
+
+#Applying random forest
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
+
+rfc1=RandomForestClassifier(random_state=42, max_features='auto', n_estimators= 500, max_depth=8, criterion='gini')
+rfc1.fit(X_train, y_train)
+pred=rfc1.predict(X_test)
+
+#finding accuracy
+
+from sklearn.metrics import accuracy_score
+
+accuracy_score(y_test,pred)
+
+
+
+
